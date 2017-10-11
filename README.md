@@ -1,6 +1,6 @@
 ### 背景
 
-组内最近打算引入微信开源的分布式消息队列phxqueue(https://github.com/tencent/phxqueue)，此库引用了libco协程库，在研究的过程中顺便对libco的源代码阅读了一下，并做相关注解，以便后续维护系统的时候查找问题查阅。libco库比较小巧精练，但是阅读的时候还是触及到一些知识盲区，相关学习的一些知识都记录在了博客中(https://langzi989.github.io/all-categories/)，有需要可以进行查阅。
+组内最近打算引入微信开源的分布式消息队列[phxqueue](https://github.com/tencent/phxqueue)，此库引用了libco协程库，在研究的过程中顺便对libco的源代码阅读了一下，并做相关注解，以便后续维护系统的时候查找问题查阅。libco库比较小巧精练，但是阅读的时候还是触及到一些知识盲区，相关学习的一些知识都记录在了[个人博客](https://langzi989.github.io/all-categories/)，有需要可以进行查阅。
 
 ### 简介
 libco是微信后台大规模使用的c/c++协程库，2013年至今稳定运行在微信后台的数万台机器上。  
