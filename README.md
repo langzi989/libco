@@ -1,15 +1,7 @@
-Libco
-===========
-Libco is a c/c++ coroutine library that is widely used in WeChat services. It has been running on tens of thousands of machines since 2013.
+### 背景
 
-Author: sunnyxu(sunnyxu@tencent.com), leiffyli(leiffyli@tencent.com), dengoswei@gmail.com(dengoswei@tencent.com), sarlmolchen(sarlmolchen@tencent.com)
+组内最近打算引入微信开源的分布式消息队列phxqueue(https://github.com/tencent/phxqueue)，此库引用了libco协程库，在研究的过程中顺便对libco的源代码阅读了一下，并做相关注解，以便后续维护系统的时候查找问题查阅。libco库比较小巧精练，但是阅读的时候还是触及到一些知识盲区，相关学习的一些知识都记录在了博客中(https://langzi989.github.io/all-categories/)，有需要可以进行查阅。
 
-By linking with libco, you can easily transform synchronous back-end service into coroutine service. The coroutine service will provide out-standing concurrency compare to multi-thread approach. With the system hook, You can easily coding in synchronous way but asynchronous executed.
-
-You can also use co_create/co_resume/co_yield interfaces to create asynchronous back-end service. These interface will give you more control of coroutines.
-
-By libco copy-stack mode, you can easily build a back-end service support tens of millions of tcp connection.
-***
 ### 简介
 libco是微信后台大规模使用的c/c++协程库，2013年至今稳定运行在微信后台的数万台机器上。  
 
@@ -46,5 +38,3 @@ $ cd build
 $ cmake ..
 $ make
 ```
-
-
