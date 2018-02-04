@@ -3,16 +3,16 @@
 
 * Copyright (C) 2014 THL A29 Limited, a Tencent company. All rights reserved.
 *
-* Licensed under the Apache License, Version 2.0 (the "License"); 
-* you may not use this file except in compliance with the License. 
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
 * You may obtain a copy of the License at
 *
 *	http://www.apache.org/licenses/LICENSE-2.0
 *
-* Unless required by applicable law or agreed to in writing, 
-* software distributed under the License is distributed on an "AS IS" BASIS, 
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-* See the License for the specific language governing permissions and 
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
 * limitations under the License.
 */
 
@@ -70,6 +70,7 @@ static void *readwrite_routine( void *arg )
 	char buf[ 1024 * 16 ];
 	for(;;)
 	{
+		//当fd=-1时，说明该协程为初始化协程，将其加入协程池，并让出CPU
 		if( -1 == co->fd )
 		{
 			g_readwrite.push( co );
@@ -78,6 +79,7 @@ static void *readwrite_routine( void *arg )
 		}
 
 		int fd = co->fd;
+		//此处将fd设置为-1的目的是当当前协程退出时,将当前协程回收如协程池中。
 		co->fd = -1;
 
 		for(;;)
@@ -88,15 +90,21 @@ static void *readwrite_routine( void *arg )
 			co_poll( co_get_epoll_ct(),&pf,1,1000);
 
 			int ret = read( fd,buf,sizeof(buf) );
+
 			if( ret > 0 )
 			{
+				printf("this is the read data:%s\n", buf);
 				ret = write( fd,buf,ret );
 			}
 			if( ret <= 0 )
 			{
 				// accept_routine->SetNonBlock(fd) cause EAGAIN, we should continue
-				if (errno == EAGAIN)
-					continue;
+				if (errno == EAGAIN) {
+						errno = 0;
+						continue;
+				}
+				errno = 0;
+				printf("error occured or connection closed\n");
 				close( fd );
 				break;
 			}
@@ -109,14 +117,15 @@ int co_accept(int fd, struct sockaddr *addr, socklen_t *len );
 static void *accept_routine( void * )
 {
 	co_enable_hook_sys();
-	printf("accept_routine\n");
+	//printf("accept_routine\n");
 	fflush(stdout);
 	for(;;)
 	{
 		//printf("pid %ld g_readwrite.size %ld\n",getpid(),g_readwrite.size());
+		//若没有可用的套接字，等待1s.
 		if( g_readwrite.empty() )
 		{
-			printf("empty\n"); //sleep
+			//printf("empty\n"); //sleep
 			struct pollfd pf = { 0 };
 			pf.fd = -1;
 			poll( &pf,1,1000);
@@ -128,7 +137,9 @@ static void *accept_routine( void * )
 		memset( &addr,0,sizeof(addr) );
 		socklen_t len = sizeof(addr);
 
+		//等待新的套接字连接
 		int fd = co_accept(g_listen_fd, (struct sockaddr *)&addr, &len);
+		//若连接失败，将当前监听套接字放入epoll时间循环
 		if( fd < 0 )
 		{
 			struct pollfd pf = { 0 };
@@ -137,12 +148,16 @@ static void *accept_routine( void * )
 			co_poll( co_get_epoll_ct(),&pf,1,1000 );
 			continue;
 		}
+
+		//若没有套接字可用，关闭新到的套接字
 		if( g_readwrite.empty() )
 		{
 			close( fd );
 			continue;
 		}
+		//将当前套接字设置为非阻塞,并从协程池中获取一个协程实例，并启动当前协程
 		SetNonBlock( fd );
+		printf("a new connection comming [fd]:[%d]\n", fd);
 		task_t *co = g_readwrite.top();
 		co->fd = fd;
 		g_readwrite.pop();
@@ -157,9 +172,9 @@ static void SetAddr(const char *pszIP,const unsigned short shPort,struct sockadd
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(shPort);
 	int nIP = 0;
-	if( !pszIP || '\0' == *pszIP   
-	    || 0 == strcmp(pszIP,"0") || 0 == strcmp(pszIP,"0.0.0.0") 
-		|| 0 == strcmp(pszIP,"*") 
+	if( !pszIP || '\0' == *pszIP
+	    || 0 == strcmp(pszIP,"0") || 0 == strcmp(pszIP,"0.0.0.0")
+		|| 0 == strcmp(pszIP,"*")
 	  )
 	{
 		nIP = htonl(INADDR_ANY);
@@ -238,7 +253,7 @@ int main(int argc,char *argv[])
 		{
 			task_t * task = (task_t*)calloc( 1,sizeof(task_t) );
 			task->fd = -1;
-
+			//开启读写套接字的协程
 			co_create( &(task->co),NULL,readwrite_routine,task );
 			co_resume( task->co );
 
@@ -254,4 +269,3 @@ int main(int argc,char *argv[])
 	if(!deamonize) wait(NULL);
 	return 0;
 }
-

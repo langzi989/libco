@@ -3,16 +3,16 @@
 
 * Copyright (C) 2014 THL A29 Limited, a Tencent company. All rights reserved.
 *
-* Licensed under the Apache License, Version 2.0 (the "License"); 
-* you may not use this file except in compliance with the License. 
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
 * You may obtain a copy of the License at
 *
 *	http://www.apache.org/licenses/LICENSE-2.0
 *
-* Unless required by applicable law or agreed to in writing, 
-* software distributed under the License is distributed on an "AS IS" BASIS, 
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-* See the License for the specific language governing permissions and 
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
 * limitations under the License.
 */
 
@@ -48,9 +48,9 @@ static void SetAddr(const char *pszIP,const unsigned short shPort,struct sockadd
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(shPort);
 	int nIP = 0;
-	if( !pszIP || '\0' == *pszIP   
-			|| 0 == strcmp(pszIP,"0") || 0 == strcmp(pszIP,"0.0.0.0") 
-			|| 0 == strcmp(pszIP,"*") 
+	if( !pszIP || '\0' == *pszIP
+			|| 0 == strcmp(pszIP,"0") || 0 == strcmp(pszIP,"0.0.0.0")
+			|| 0 == strcmp(pszIP,"*")
 	  )
 	{
 		nIP = htonl(INADDR_ANY);
@@ -112,47 +112,55 @@ static void *readwrite_routine( void *arg )
 	{
 		if ( fd < 0 )
 		{
+			//aocket函数被hook，内部自动将其设置为非阻塞.
 			fd = socket(PF_INET, SOCK_STREAM, 0);
 			struct sockaddr_in addr;
 			SetAddr(endpoint->ip, endpoint->port, addr);
+
 			ret = connect(fd,(struct sockaddr*)&addr,sizeof(addr));
-						
+
+			//当非阻塞套接字出现EALREADY或EINPROGRESS说明连接正在建立或还未建立成功,此时需要等待当前套接字建立成功，
 			if ( errno == EALREADY || errno == EINPROGRESS )
-			{       
+			{
 				struct pollfd pf = { 0 };
 				pf.fd = fd;
 				pf.events = (POLLOUT|POLLERR|POLLHUP);
+				printf("this is before poll\n");
+				//连接未建立，等待200ms
 				co_poll( co_get_epoll_ct(),&pf,1,200);
 				//check connect
 				int error = 0;
 				uint32_t socklen = sizeof(error);
 				errno = 0;
 				ret = getsockopt(fd, SOL_SOCKET, SO_ERROR,(void *)&error,  &socklen);
-				if ( ret == -1 ) 
-				{       
+				if ( ret == -1 )
+				{
 					//printf("getsockopt ERROR ret %d %d:%s\n", ret, errno, strerror(errno));
 					close(fd);
 					fd = -1;
 					AddFailCnt();
 					continue;
-				}       
-				if ( error ) 
-				{       
+				}
+				if ( error )
+				{
 					errno = error;
 					//printf("connect ERROR ret %d %d:%s\n", error, errno, strerror(errno));
 					close(fd);
 					fd = -1;
 					AddFailCnt();
 					continue;
-				}       
-			} 
-	  			
+				}
+			}
+
 		}
-		
+
 		ret = write( fd,str, 8);
+		printf("[pid]:[%d] write data:[%s]\n", getpid(), str);
 		if ( ret > 0 )
 		{
 			ret = read( fd,buf, sizeof(buf) );
+			printf("the read data is:%s\n", buf);
+			sleep(1000);
 			if ( ret <= 0 )
 			{
 				//printf("co %p read ret %d errno %d (%s)\n",
@@ -163,14 +171,13 @@ static void *readwrite_routine( void *arg )
 			}
 			else
 			{
-				//printf("echo %s fd %d\n", buf,fd);
 				AddSuccCnt();
 			}
 		}
 		else
 		{
-			//printf("co %p write ret %d errno %d (%s)\n",
-			//		co_self(), ret,errno,strerror(errno));
+			printf("co %p write ret %d errno %d (%s)\n",
+					co_self(), ret,errno,strerror(errno));
 			close(fd);
 			fd = -1;
 			AddFailCnt();
@@ -186,11 +193,11 @@ int main(int argc,char *argv[])
 	endpoint.port = atoi(argv[2]);
 	int cnt = atoi( argv[3] );
 	int proccnt = atoi( argv[4] );
-	
+
 	struct sigaction sa;
 	sa.sa_handler = SIG_IGN;
 	sigaction( SIGPIPE, &sa, NULL );
-	
+
 	for(int k=0;k<proccnt;k++)
 	{
 
@@ -205,6 +212,7 @@ int main(int argc,char *argv[])
 		}
 		for(int i=0;i<cnt;i++)
 		{
+			//创建并启动客户端协程
 			stCoRoutine_t *co = 0;
 			co_create( &co,NULL,readwrite_routine, &endpoint);
 			co_resume( co );
